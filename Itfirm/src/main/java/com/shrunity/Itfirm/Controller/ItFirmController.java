@@ -5,6 +5,10 @@ import com.shrunity.Itfirm.Service.ProductService;
 import com.shrunity.Itfirm.exception.InvalidPriceException;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -13,16 +17,17 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/product")
-@Validated //automatic validation on incoming requests
+@Validated //automatic validation on incoming requests so that Spring can automatically
+// check fields based on annotations like @NotNull, @Size, @Min
 public class ItFirmController {
-
     @Autowired
     ProductService service;
 
     //read : get mapping : all product
     @GetMapping
-    public ResponseEntity<List<ProductDTO>> getAllProducts(){
-        List<ProductDTO> productDTO= service.getAll();
+    public ResponseEntity<Page<ProductDTO>> getAllProducts(
+            @PageableDefault(size=10,page=0)Pageable pageable){
+        Page<ProductDTO> productDTO = service.getAll(pageable);
         return ResponseEntity.ok(productDTO);
     }
 
@@ -39,8 +44,8 @@ public class ItFirmController {
 
     //create : post mapping
     @PostMapping("/create")
-    public ResponseEntity<ProductDTO> createProduct(@Validated @RequestBody ProductDTO productDTO) {
-
+    public ResponseEntity<String> createProduct(@Validated @RequestBody ProductDTO productDTO) {
+        ProductDTO savedProduct = service.create(productDTO);
         double price = productDTO.getPrice();
 
         // Validate price according to your condition
@@ -48,8 +53,8 @@ public class ItFirmController {
             throw new InvalidPriceException("Price must be greater than 0 and less than or equal to 100000");
         }
 
-        ProductDTO savedProduct = service.create(productDTO);
-        return ResponseEntity.ok(savedProduct);
+       // ProductDTO savedProduct = service.create(productDTO);
+        return new ResponseEntity<>("Successfully Added the given product", HttpStatus.CREATED);
     }
 
 

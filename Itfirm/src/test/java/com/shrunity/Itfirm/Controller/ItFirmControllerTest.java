@@ -7,6 +7,10 @@ import com.shrunity.Itfirm.exception.InvalidPriceException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -40,39 +44,22 @@ public class ItFirmControllerTest {
 
     @Test
     public void testGetAllProducts() throws Exception {
+        ProductDTO p1 = new ProductDTO(1L, "Book", 230, "23/03/2002", "23/12/2025");
+        ProductDTO p2 = new ProductDTO(2L, "Pen", 20, "01/01/2020", "01/01/2026");
 
-        ProductDTO p1 = new ProductDTO(
-                1L,
-                "Book",
-                230,
-                "23/03/2002",
-                "23/12/2025"
-        );
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<ProductDTO> page = new PageImpl<>(Arrays.asList(p1, p2), pageable, 2);
 
-        ProductDTO p2 = new ProductDTO(
-                2L,
-                "Pen",
-                20,
-                "01/01/2020",
-                "01/01/2026"
-        );
+        when(service.getAll(any(Pageable.class))).thenReturn(page);
 
-        when(service.getAll())
-                .thenReturn(Arrays.asList(p1, p2));
-
-        mockMvc.perform(
-                        MockMvcRequestBuilders.get("/api/product")
-                )
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/product")
+                        .param("page", "0")
+                        .param("size", "10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
-
-                .andExpect(jsonPath("$[0].id").value(1))
-                .andExpect(jsonPath("$[0].productName").value("Book"))
-                .andExpect(jsonPath("$[0].price").value(230))
-
-                .andExpect(jsonPath("$[1].id").value(2))
-                .andExpect(jsonPath("$[1].productName").value("Pen"))
-                .andExpect(jsonPath("$[1].price").value(20));
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.content[0].productName").value("Book"))
+                .andExpect(jsonPath("$.content[1].productName").value("Pen"))
+                .andExpect(jsonPath("$.totalElements").value(2));
     }
 
 
