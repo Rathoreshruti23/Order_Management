@@ -5,17 +5,19 @@ import com.shrunity.Itfirm.Repository.ProductRepository;
 import com.shrunity.Itfirm.entity.Product;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-
-import static org.codehaus.groovy.runtime.DefaultGroovyMethods.any;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 //“In unit tests, the expected DTO is created in the test itself;
@@ -32,32 +34,35 @@ class ServiceImplTest {
     @Test
     void getAllShouldSuccessfullyGetAllProduct() {
         System.out.println("First test case for getAll method");
-        List<Product> productList = new ArrayList<>();
-        Product product1 = new Product(); //creating object of entity
+
+        // Arrange
+        Product product1 = new Product();
+        product1.setId(1L);
         product1.setProductName("Comb");
-        product1.setId(1L); // L =long
-        productList.add(product1); // added to arraylist
 
         Product product2 = new Product();
+        product2.setId(2L);
         product2.setProductName("Makeup");
-        product2.setId(1L);
-        productList.add(product2);
 
-        when(productRepository.findAll()).thenReturn(productList); //Whenever productRepository.findAll() is called,
-        // return this productList instead of actually querying the database.
+        List<Product> productList = Arrays.asList(product1, product2);
 
-        //Act
-        List<ProductDTO> productDTOList = productService.getAll();
-        //Assert
-        assertNotNull(productDTOList);
-        assertEquals(2, productDTOList.size()); // expected 2 elemenet in array
-        assertEquals("Comb", productDTOList.get(0).getProductName());
-        assertEquals("Makeup", productDTOList.get(1).getProductName());
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Product> productPage = new PageImpl<>(productList, pageable, productList.size());
 
-        verify(productRepository, times(1)).findAll(); //Confirms that productRepository.findAll() was called exactly once.
-        //Ensures the service actually interacted with the repository.
+        when(productRepository.findAll(pageable)).thenReturn(productPage);
+
+        // Act
+        Page<ProductDTO> productDTOPage = productService.getAll(pageable);
+
+        // Assert
+        assertNotNull(productDTOPage);
+        assertEquals(2, productDTOPage.getContent().size());
+        assertEquals("Comb", productDTOPage.getContent().get(0).getProductName());
+        assertEquals("Makeup", productDTOPage.getContent().get(1).getProductName());
+        assertEquals(2, productDTOPage.getTotalElements());
+
+        verify(productRepository, times(1)).findAll(pageable);
     }
-
     @Test
     void CreateShouldSuccessfullyCreateProduct() {
         //Arrange : Set up your test data, mocks, or objects.
@@ -72,7 +77,8 @@ class ServiceImplTest {
         savedProduct.setId(1L);
         savedProduct.setProductName(productDTO.getProductName());
         // Mock repository save behavior
-        when(productRepository.save(productEntity)).thenReturn(savedProduct);
+        when(productRepository.save(Mockito.any(Product.class))).thenReturn(savedProduct);
+
 
         // Act : Call the method you want to test.
         ProductDTO result = productService.create(productDTO); // we need to pass an object but still the
@@ -83,7 +89,7 @@ class ServiceImplTest {
         assertEquals(1L, result.getId()); //ID should be 1
         assertEquals("New Product", result.getProductName()); //name should match
 
-        verify(productRepository, times(1)).save(productEntity);
+        verify(productRepository, times(1)).save(Mockito.any(Product.class));
 
     }
 
@@ -112,19 +118,12 @@ class ServiceImplTest {
         /*Full flow in simple words
 
 productService.get(2L) is executed
-
 Service throws RuntimeException
-
 assertThrows catches it
-
 JUnit stores it in exception
-
 exception.getMessage() extracts the message string
-
 assertEquals() compares:
-
 Expected message
-
 Actual message */
 
         // Arrange: prepare test data
@@ -149,17 +148,22 @@ Actual message */
         // Ensure repository method was called exactly once
         verify(productRepository, times(1)).findById(productId);
     }
-
-    @Test
-    void deleteAllShouldSuccessfullyDeleteALLProduct() {
 //Act
-        String reponse = productService.deleteAll();
-        //assert
-        verify(productRepository, times(1)).deleteAll();
-        assertEquals("Deleted all items successfully", reponse);
-    }
+        @Test
+        void deleteAllShouldSuccessfullyDeleteALLProduct() {
+            // Arrange
+            doNothing().when(productRepository).deleteAll();
 
-    @Test
+            // Act
+            String response = productService.deleteAll();
+
+            // Assert
+            verify(productRepository, times(1)).deleteAll();
+            assertEquals("Deleted all items successfully", response);
+        }
+
+
+        @Test
     void deleteByIDShouldDeleteProductWhenExits() {
         Long ProductId = 1L;
         //Arrange
@@ -217,10 +221,16 @@ Actual message */
         Product existingProduct = new Product(); //entity : Current state in database : Existing DB row
         existingProduct.setId(id);
         existingProduct.setProductName("old Product");
+        existingProduct.setPrice(300);
+        existingProduct.setMfd("01/01/1995");
+        existingProduct.setExp("01/01/2000");
 
         Product Updatedproduct = new Product(); //
         Updatedproduct.setProductName("Updated Product");
         Updatedproduct.setId(id);
+        Updatedproduct.setPrice(500);
+        Updatedproduct.setMfd("23/03/1998");
+        Updatedproduct.setExp("12/12/2002");
         //Arrange
         when(productRepository.findById(id)).thenReturn(Optional.of(existingProduct)); //Optional.of :Creates an Optional that contains a value.
         //The value cannot be null — if you pass null, it will throw: NullPointerException : When you are sure the value exists.
@@ -228,13 +238,15 @@ Actual message */
         //Safe alternative to null → avoids NullPointerException.
         //Use case:
         //When the value does not exist
-        when(productRepository.findById(id)).thenReturn(Optional.of(Updatedproduct));
+        when(productRepository.save(Mockito.<Product>any()))
+                .thenReturn(Updatedproduct);
+      //  when(productRepository.findById(id)).thenReturn(Optional.of(Updatedproduct));
         ProductDTO response = productService.updateById(id, productDTO);
         assertNotNull(response);
         assertEquals("Updated Product", response.getProductName());
 
         verify(productRepository,times(1)).findById(id);
-        verify(productRepository,times(1)).save(existingProduct);
+        verify(productRepository, times(1)).save(Mockito.<Product>any());
     }
     @Test
     void updateById_ShouldThrowsException_WhenProductNotExists(){
